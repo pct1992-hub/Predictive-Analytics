@@ -1,0 +1,127 @@
+---
+title: "Predictive Analytics With H2O"
+author: "Peter Thompson"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+```{r}
+# Task 2: Import Libraries
+library(tidyverse)
+library(readxl)
+library(h2o)
+
+```
+
+```{r}
+# Task 3: Read the Excel Sheets
+
+path <- "UCI_bank_marketing.xlsx"
+sheets <- excel_sheets(path)
+
+```
+
+
+```{r}
+# Task 3.1: Explore Data in each Sheet
+sheets %>%
+  map(~ read_excel(path = path, sheet = .)) %>%
+  set_names(sheets)
+
+```
+
+
+```{r}
+# Task 3.2: Join Data by ID Column (VLOOKUP Equivalent)
+# In Excel this can be done quickly with Power Query, not vlookpup. A quick way to scrub data before loading into R
+
+data_joined <- sheets[4:7] %>%
+  map(~ read_excel(path = path, sheet = .)) %>%
+  reduce(left_join)
+
+### Check for class distribution
+
+table(data_joined$TERM_DEPOSIT)
+
+```
+
+```{r}
+# Task 4: Start H2O Cluster
+## Change memory allocation depending on system hardware-- 64gb DDR5 6000MT/s on my local system. For stability, do not allocate more memory than available.
+
+#h2o.init(max_mem_size = "10g")
+#library(h2o)
+h2o.init(ip = "localhost", port = 54321)
+
+
+```
+
+```{r}
+# Task 4.1: Data Preparation
+data_joined <- data_joined %>%
+  mutate_if(is.character, as.factor)
+
+train <- as.h2o(data_joined)
+
+# Train [,y] <- as.factor(train[,y]) used if the column is not coded as a factor
+y <- "TERM_DEPOSIT"
+
+# Need to remove unique identifiers, which would compromise results as unique ID is not predictive of response variable, in fact it would be perfectly multicolinear.
+
+x <- setdiff(names(train), c(y, "ID"))
+
+```
+
+```{r}
+# Task 5: H2O AutoML Training
+aml <- h2o.automl(
+  x = x,
+  y = y,
+  training_frame = train,
+  #project_name = "FirstRun", set project name if desired
+  ## Set runtime max for the training, or use 'max_model = #' to set the maximum number of models created. This will be dependent on hardware.
+  max_runtime_secs = 240,
+  #max_model = 100,
+  balance_classes = TRUE #exclude_algos can be used to remove model types, sort_metric = "logloss"
+)
+```
+
+```{r}
+# Task 6: View AutoML Leaderboard
+lb <- aml@leaderboard
+print(lb, n = nrow(lb))
+
+```
+
+```{r}
+# 6.1 Ensemble Exploration ----
+
+# Step 1: Extract model IDs from the leaderboard
+model_ids <- as.data.frame(aml@leaderboard$model_id)[,1]
+
+# Step 2: Get the best ensemble model from the leaderboard
+se <- h2o.getModel(grep("StackedEnsemble_BestOfFamily", model_ids, value = TRUE)[1])
+
+# Step 3: Extract the metalearner from the ensemble model
+metalearner <- h2o.getModel(se@model$metalearner$name)
+# Note: The metalearner is the model that combines the predictions of the base models in the ensemble.
+
+# Step 4: Display variable importance from the metalearner
+h2o.varimp(metalearner)
+
+# Step 5: Plot variable importance
+h2o.varimp_plot(metalearner)
+
+```
+
+```{r}
+# Task 7: Baselearner Variable Importance 
+
+xgb <- h2o.getModel(grep("XGBoost", model_ids, value = TRUE)[1])
+h2o.varimp(xgb)
+h2o.varimp_plot(xgb)
+
+```
+
+
