@@ -1,0 +1,140 @@
+---
+title: "Visualizing & Summarizing Relationships"
+format: html
+editor: visual
+editor_options:
+  chunk_output_type: console
+---
+
+## Load Packages
+
+```{r}
+#| message: false
+#| title: load-packages
+#| echo: false
+
+library(tidyverse) # wrangling and visualization
+library(ggplot2)
+library(dplyr)
+library(openintro) #data source
+library(scales) #axis label enhancement
+library(ggridges) #ridgeline plots
+library(gridExtra) #grid.arrange
+
+```
+
+```{r}
+glimpse(duke_forest)
+
+ggplot(duke_forest, aes(x = area, y = price)) +
+  geom_point()
+
+duke_forest |>
+  summarize(r = cor(area, price))
+
+ggplot(duke_forest, aes(x = price, fill = cooling)) +
+  geom_histogram(binwidth = 100000)
+
+ggplot(duke_forest, aes(x = price, y = cooling)) +
+  geom_boxplot()
+
+```
+
+```{r}
+#| message: false
+#| title: Density-Plot
+
+ggplot(
+  duke_forest,
+  aes(x = price, color = cooling, fill = cooling)
+  ) +
+  geom_density(alpha = 0.5)
+
+
+```
+
+```{r}
+#| message: false
+#| title: Violin-Plot
+
+ggplot(
+  duke_forest,
+  aes(x = price, y = cooling)
+  ) +
+  geom_violin()
+
+duke_forest |>
+  summarize(
+    median_price = median(price),
+    min_price = min(price),
+    iqr_price = IQR(price),
+    max_price = max(price)
+    )
+
+```
+
+```{r}
+
+duke_forest <- duke_forest |>
+  mutate(
+   year_built_cat = if_else(
+     year_built >= 1970,
+     "1970 or later",
+     "1969 or earlier"
+   )
+  )
+
+duke_forest |>
+  select(contains("year_built"))
+
+```
+
+```{r}
+
+ggplot(duke_forest, aes(x = year_built_cat, fill = cooling))
+  geom_bar()
+  
+```
+
+```{r}
+
+duke_forest |>
+  count(year_built_cat, cooling) |>
+  group_by(year_built_cat) |>
+  mutate(prop = n / sum(n))
+
+```
+
+```{r}
+ggplot(
+  duke_forest,
+  aes(
+    x = area, y = price,
+    color = cooling, shape = cooling
+    )
+  ) +
+  geom_point(alpha = 0.7, size = 4) +
+  scale_x_continuous(labels = label_number(big.mark = ",")) +
+  scale_y_continuous(labels = label_dollar()) +
+  scale_color_manual(
+    values = c("central" = "darkblue", "forced air" = "red", "other" = "green")
+    ) +
+  labs(
+    title = "Houses in Duke Forest",
+    subtitle = "Durham, NC",
+    color = "Cooling Type", shape = "Cooling Type",
+    x = "Area (sqft)", 
+    y = "Price ($)",
+    caption = "Data Source: Zillow"
+    ) +
+  facet_wrap(~cooling, ncol = 1)
+
+duke_forest |>
+  group_by(cooling) |>
+  summarize(r = cor(price, area))
+
+
+
+
+
+```
